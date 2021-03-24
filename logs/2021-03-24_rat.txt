@@ -1,0 +1,14 @@
+Rat number: 3 , Date: 24032021 
+323,322,323,322,316,322,316,322,316,
+Rat number: 2 , Date: 24032021 
+Rat number: 6 , Date: 24032021 
+Rat number: 5 , Date: 24032021 
+Rat number: 6 , Date: 24032021 
+Rat number: 6 , Date: 23032021 
+Rat number: 7 , Date: 23032021 
+Rat number: 1 , Date: 20212021 
+Rat number: 2 , Date: 23032021 
+Rat number: 5 , Date: 25022021 
+Rat number: 1 , Date: 12 
+Rat number: 2 , Date: 23032021 
+112,119,118,124,201,207,208,209,210,211,212,219,
