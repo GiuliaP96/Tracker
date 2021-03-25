@@ -227,13 +227,14 @@ class Tracker:
                        (found,Rat) = tracker.update(backsub)    #update tracker with new frame bounding box  
                      # self.paused= False
                        counter=0 ##count number of time rat is not found
-                       if not found: # Tracking failure
+                       if not found and self.frame is not None: # Tracking failure
                              self.failed=True
                              counter += 1 #update counter  (int(self.frame_time))
-                             cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),2)
-                             cv2.putText(self.disp_frame, "Press R to select new ROI", (30,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1.5)
-                    #         cv2.putText(self.disp_frame, "Press S to save new trial", (25,340), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1)
-                             cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (1000,35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0,0,250), 1)
+                             cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
+                             cv2.putText(self.disp_frame, "Press R to select new ROI", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+                             cv2.putText(self.disp_frame, "Press E to stop tracking", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+                             cv2.putText(self.disp_frame, "Press S to start new trial", (45,275), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+                            # cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
                              Rat=boxes[len(boxes)-1] #assigne last boxes for the next frames 
                              if counter>3:
                                  print('counter',counter)
@@ -408,8 +409,11 @@ class Tracker:
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
             cv2.putText(frame,'Currently writing to file...', (60,80), 
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
-            cv2.putText(frame, str(self.converted_time), (930,670), 
-                        fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)    
+            cv2.putText(frame, str(self.converted_time), (970,670), 
+                        fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)
+           # if self.failed==True:
+            #   cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
+
 
             #draw the path that the rat has traversed
             if len(self.centroid_list) >= 2:
