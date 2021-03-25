@@ -120,13 +120,17 @@ class Tracker:
             self.frame_time = self.cap.get(cv2.CAP_PROP_POS_MSEC)
             self.frame_rate = self.cap.get(cv2.CAP_PROP_FPS)
             self.converted_time = convert_milli(int(self.frame_time))
+            
             #process and display frame
             if self.frame is not None:
                 self.disp_frame = self.frame.copy()
                 self.disp_frame = cv2.resize(self.disp_frame, (1176, 712)) 
                 self.preprocessing(self.disp_frame, Rat, tracker,Init,boxes)
+                self.calculate_velocity(self.time_points)
                 self.annotate_frame(self.disp_frame)
                 cv2.imshow('Tracker', self.disp_frame)
+          #  if self.frame is None:
+           #     
 
             #log present centroid position if program is in 'save mode'
             if self.record_detections and not self.paused:
@@ -146,6 +150,7 @@ class Tracker:
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
+                self.calculate_velocity(self.time_points)
                 print('#Program ended by user')
                 break
 
@@ -221,16 +226,14 @@ class Tracker:
                             Init = True
                        (found,Rat) = tracker.update(backsub)    #update tracker with new frame bounding box  
                      # self.paused= False
-
                        counter=0 ##count number of time rat is not found
                        if not found: # Tracking failure
                              self.failed=True
-                             converted_time = convert_milli(int(self.frame_time))
                              counter += 1 #update counter  (int(self.frame_time))
-                             cv2.putText(self.disp_frame, "Tracking failure", (80,200), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1)
-                             cv2.putText(self.disp_frame, "Press R to select new ROI", (25,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1)
+                             cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),2)
+                             cv2.putText(self.disp_frame, "Press R to select new ROI", (30,300), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1.5)
                     #         cv2.putText(self.disp_frame, "Press S to save new trial", (25,340), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,250),1)
-                             cv2.putText(self.disp_frame, "Time : " + str(converted_time), (50,350), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0,0,250), 1)
+                             cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (1000,35), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0,0,250), 1)
                              Rat=boxes[len(boxes)-1] #assigne last boxes for the next frames 
                              if counter>3:
                                  print('counter',counter)
@@ -239,7 +242,6 @@ class Tracker:
                              cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255), 2)
                              
                        if found:# Tracking success 
-                                  
                                 (x, y, w, h) = [int(v) for v in Rat]
                                 myBox = (x, y, w, h)
                                 boxes.append(myBox)
@@ -279,7 +281,7 @@ class Tracker:
         for contour in contours:
             area = cv2.contourArea(contour)
 
-            if area > 1:            #MIN_RAT_SIZE = 5 previously
+            if area > 2:            #prev MIN_RAT_SIZE = 5 
                 contour_moments = cv2.moments(contour)           
                 cx = int(contour_moments['m10'] / contour_moments['m00'])
                 cy = int(contour_moments['m01'] / contour_moments['m00'])
@@ -313,28 +315,28 @@ class Tracker:
                         self.pos_centroid = self.centroid_list[-2]
                         
 
-    def calculate_velocity(self,time_points):              
-     
-        ##iterate over list of touple with time points and nodes IDs
-            ##calculate rat speed between two consecutive nodes
-
+    def calculate_velocity(self,time_points): #
+    
+    ##calculate rat speed between two consecutive nodes 
+    ##result e.g.summary trial - [ [('209', '210'), (16.76, 17.56), 0.375] , [('210', '211'), (17.56, 17.88), 0.937],]  
+ 
       bridge =  {0.3:('124', '201'),
            1.72:('121', '302'),
            1.69:('223', '404'),
            0.3:('324', '401'),
            0.3:('305', '220')}
       if len(time_points) > 2:
-            duration=[]
+            summary_trial=[]
             lenght=0
             first_node= time_points[0][1]
-           
+        ##iterate over list of touple with time points and nodes IDs
+        ###grab start time and node name and next node         
             for i in range(0, len(time_points)):
               start_node= time_points[i][1]
               start_time=((time_points[i][0])/ 1000) % 60 
               j=i+1
               if j == len(time_points):
                 last_node= time_points[i][1]
-                print('Start:', first_node,'\nGoal:',last_node)
                 break
               else:
                 end_node= time_points[j][1]
@@ -344,14 +346,16 @@ class Tracker:
                    if start_node in dk:
                        if end_node in dk:
                           lenght= k
-                          #print(k,dk)
                    else:
-                          lenght=0.3
-                speed= round(lenght/sec, 3)  ##round to first 3 decimals
-                duration.append([(start_node,end_node),(start_time,end_time),speed])
+                          lenght=0.3    ##30cm within islands
+                speed= round(lenght/sec, 3)  
+                summary_trial.append([(start_node,end_node),(start_time,end_time),speed])
                 self.saved_velocities.append(speed)
-            print(duration)
-            
+        
+      if self.frame is None:
+          print(summary_trial)
+          print('Start:', first_node,'\nGoal:',last_node)
+
             
     @staticmethod
     def annotate_node(frame, point, node):
@@ -374,8 +378,6 @@ class Tracker:
         record = self.record_detections and not self.paused             #condition to go into 'save mode'
         fail_detection = self.record_detections and not self.paused and self.failed
         
-
-
         #if the centroid position of rat is within 20 pixels of any node
         #register that node to a list. 
         if self.pos_centroid is not None:
@@ -390,7 +392,8 @@ class Tracker:
                            self.time_points.append([self.frame_time,node_name])
                         if node_name != self.saved_nodes[(len(self.saved_nodes))-2]:
                                self.time_points.append([self.frame_time,node_name])
-                               self.calculate_velocity(self.time_points)
+         
+      #  self.calculate_velocity(self.time_points)
 
         #annotate all nodes the rat has traversed
         for i in range(0, len(self.saved_nodes)):
@@ -405,8 +408,8 @@ class Tracker:
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
             cv2.putText(frame,'Currently writing to file...', (60,80), 
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
-            cv2.putText(frame, str(self.converted_time), (1000,690), 
-                        fontFace = FONT, fontScale = 0.75, color = (250,250,128), thickness = 2)    
+            cv2.putText(frame, str(self.converted_time), (930,670), 
+                        fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)    
 
             #draw the path that the rat has traversed
             if len(self.centroid_list) >= 2:
