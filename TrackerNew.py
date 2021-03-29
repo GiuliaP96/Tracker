@@ -20,7 +20,7 @@ Author(s): Atharva Kand-Giulia Porro
 
 from utils import mask, kalman_filter
 from itertools import groupby
-from datetime import date 
+from datetime import date, timedelta, datetime
 from pathlib import Path 
 from collections import deque
 
@@ -73,9 +73,10 @@ class Tracker:
         self.failed = False
         self.frame = None
         self.frame_rate = 0
+        self.frame_count= None
         self.disp_frame = None
         self.total_detections = -1
-        self.trialnum = 1
+        self.trialnum = 0
 
         self.pos_centroid = None
         self.kf_coords = None
@@ -99,13 +100,13 @@ class Tracker:
         '''
         Frame by Frame looping of video
         '''
-        save_flag = 0
         print('loading tracker...\n')
         time.sleep(2.0)
         Rat= None 
         Init=False
         boxes =[]
         tracker=None
+        self.fail_flag= 0
     
 
         with open(self.save, 'a+') as file:
@@ -119,6 +120,7 @@ class Tracker:
 
             self.frame_time = self.cap.get(cv2.CAP_PROP_POS_MSEC)
             self.frame_rate = self.cap.get(cv2.CAP_PROP_FPS)
+            self.frame_count=  self.cap.get(cv2.CAP_PROP_FRAME_COUNT)
             self.converted_time = convert_milli(int(self.frame_time))
             
             #process and display frame
@@ -126,11 +128,8 @@ class Tracker:
                 self.disp_frame = self.frame.copy()
                 self.disp_frame = cv2.resize(self.disp_frame, (1176, 712)) 
                 self.preprocessing(self.disp_frame, Rat, tracker,Init,boxes)
-                self.calculate_velocity(self.time_points)
                 self.annotate_frame(self.disp_frame)
-                cv2.imshow('Tracker', self.disp_frame)
-          #  if self.frame is None:
-           #     
+                cv2.imshow('Tracker', self.disp_frame)    
 
             #log present centroid position if program is in 'save mode'
             if self.record_detections and not self.paused:
@@ -140,63 +139,53 @@ class Tracker:
                         logger.info(f'{converted_time} : The rat position is: {self.pos_centroid} @ {self.saved_nodes[-1]}')
                     else:
                         logger.info(f'{converted_time} : The rat position is: {self.pos_centroid}')
-                    if self.saved_nodes and self.failed:
-                         logger.info(f'{converted_time} : The rat position after failed is: {self.pos_centroid} @ {self.saved_nodes[-1]}')
-                    else:
-                        logger.info(f'{converted_time} : The rat position after failed is: {self.pos_centroid}')
-                        
-                else:
-                    logger.info('Rat not detected')
+                 
+               # else:
+                #    logger.info('Rat not detected')
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
-                self.calculate_velocity(self.time_points)
                 print('#Program ended by user')
                 break
 
             elif key == ord('s'):
+                #condition to save/log data to file upon press of 's' key creating new trial in log file
                 self.failed= False
                 self.record_detections = not self.record_detections
-                Init=False
+                #self.save_to_file(self.save)
+                self.saved_nodes = []
+                self.node_pos = []
+                self.centroid_list = []
+                self.trialnum += 1
+                logger.info('Recording Trial {}'.format(self.trialnum)) 
                 Rat=None
+                Init=False 
                 Rat = cv2.selectROI("Select ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
-                save_flag += 1
+                
                 tracker =cv2.TrackerCSRT_create()
                 
-                #condition to save/log data to file upon second press of 's' key
-                if save_flag / 2 == 1:
-                    self.save_to_file(self.save)
-                    self.saved_nodes = []
-                    self.node_pos = []
-                    self.centroid_list = []
-                    self.trialnum += 1
-                    save_flag = 0
-                else:
-                    logger.info('Recording Trial {}'.format(self.trialnum))                
-                
-                
+
             elif key == ord('r'):
-                self.failed= False
-                self.paused =not self.paused
+                ##condition to select a new roi re-initialting tracker in same trialnum
+               # self.record_detections = not self.record_detections
                 Init=False
                 Rat=None
+                self.fail_flag =+1
                 Rat = cv2.selectROI("Select another ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
-                save_flag += 1
-                self.paused =not self.paused
                 tracker =cv2.TrackerCSRT_create()
-                if save_flag >= 1:
-                    self.save_to_file(self.save)
-                    self.saved_nodes = []
-                    self.node_pos = []
-                    self.centroid_list = []
+                logger.info('Recording Trial after failed detection {}'.format(self.fail_flag)) 
+                self.failed= not self.failed
                     
-                    save_flag = 0
-                else:
-                    logger.info('Recording Trial after failed detection {}'.format(self.trialnum))    
                     
             elif key == ord('e'):
+                ##condition to save to file and calculate velocity
+                self.calculate_velocity(self.time_points)
                 self.record_detections = not self.record_detections
-                
+                self.save_to_file(self.save)
+                print('Trial number', self.trialnum, '\nStart:', self.first_node,'\nGoal:',self.last_node)  
+                self.saved_nodes = []
+                #self.node_pos = []
+                #self.centroid_list = []
 
             elif key == ord(' '):
                 self.paused = not self.paused
@@ -210,14 +199,20 @@ class Tracker:
 
         Input: Frame (i.e image to be preprocessed)
         '''
+      
         frame  = np.array(frame)
         i=0
         #apply mask on frame from mask.py                                 
         for i in range(0,3):
             frame[:, :, i] = frame[:, :, i] * self.hex_mask        
-        #background subtraction and morphology
+        #background subtraction and morphology 
         backsub = BG_SUB.apply(frame)
-        if Rat is not None: ##Selected Roi
+     #   kernel = np.ones((5,5),np.uint8)  
+                                #morphology operations
+      #  gradient = cv2.morphologyEx(backsub, cv2.MORPH_GRADIENT, kernel)
+        #backsub = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
+        cv2.imshow('FRAME  TRACKER CSRT',backsub)
+        if Rat and self.frame is not None: ##Selected Roi
                 # Initialize tracker with first frame and bounding box if was not init before
                        if(not Init):
                             tracker.init(backsub, Rat)
@@ -231,9 +226,6 @@ class Tracker:
                              self.failed=True
                              counter += 1 #update counter  (int(self.frame_time))
                              cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
-                             cv2.putText(self.disp_frame, "Press R to select new ROI", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
-                             cv2.putText(self.disp_frame, "Press E to stop tracking", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
-                             cv2.putText(self.disp_frame, "Press S to start new trial", (45,275), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
                             # cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
                              Rat=boxes[len(boxes)-1] #assigne last boxes for the next frames 
                              if counter>3:
@@ -261,7 +253,7 @@ class Tracker:
                                 #morphology operations
                                 gradient = cv2.morphologyEx(fin, cv2.MORPH_GRADIENT, kernel)
                                 closing = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
-                      #         cv2.imshow('Closing',closing)
+                             #   cv2.imshow('to FIND CONTOURS',gradient)
                      
                                 self.find_contours(closing)
                       
@@ -321,41 +313,40 @@ class Tracker:
     ##calculate rat speed between two consecutive nodes 
     ##result e.g.summary trial - [ [('209', '210'), (16.76, 17.56), 0.375] , [('210', '211'), (17.56, 17.88), 0.937],]  
  
-      bridge =  {0.3:('124', '201'),
-           1.72:('121', '302'),
-           1.69:('223', '404'),
-           0.3:('324', '401'),
-           0.3:('305', '220')}
-      if len(time_points) > 2:
-            summary_trial=[]
+      bridges =  {60:('124', '201'),
+           172:('121', '302'),
+           169:('223', '404'),
+           60:('324', '401'),
+           60:('305', '220')}
+      if len(time_points) > 3:
+            self.summary_trial=[]
             lenght=0
-            first_node= time_points[0][1]
+            self.first_node= time_points[0][1]
+            
+            format = '%H:%M:%S.%f' 
+            # first_time=((time_points[i][0])/ 1000) % 60 
         ##iterate over list of touple with time points and nodes IDs
         ###grab start time and node name and next node         
             for i in range(0, len(time_points)):
               start_node= time_points[i][1]
-              start_time=((time_points[i][0])/ 1000) % 60 
+              start_time= datetime.strptime((time_points[i][0]), format).time()
               j=i+1
               if j == len(time_points):
-                last_node= time_points[i][1]
+                self.last_node= time_points[i][1]
                 break
               else:
                 end_node= time_points[j][1]
-                end_time=((time_points[j][0])/ 1000) % 60 
-                sec = end_time-start_time
-                for k, dk in bridge.items():
+                end_time=datetime.strptime((time_points[j][0]), format).time()
+                difference = timedelta(hours= end_time.hour-start_time.hour, minutes= end_time.minute-start_time.minute, seconds=end_time.second-start_time.second, microseconds=end_time.microsecond-start_time.microsecond).total_seconds()
+                for k, dk in bridges.items():
                    if start_node in dk:
                        if end_node in dk:
                           lenght= k
                    else:
-                          lenght=0.3    ##30cm within islands
-                speed= round(lenght/sec, 3)  
-                summary_trial.append([(start_node,end_node),(start_time,end_time),speed])
+                          lenght=30    ##30cm within islands
+                speed= round(lenght/difference, 3)
+                self.summary_trial.append([(start_node,end_node),(time_points[i][0],time_points[j][0]),difference,lenght,speed])
                 self.saved_velocities.append(speed)
-        
-      if self.frame is None:
-          print(summary_trial)
-          print('Start:', first_node,'\nGoal:',last_node)
 
             
     @staticmethod
@@ -390,9 +381,10 @@ class Tracker:
                         
                         ###save timepoints for speed calculation
                         if len(self.time_points) <= 0:  
-                           self.time_points.append([self.frame_time,node_name])
+                           self.time_points.append([self.converted_time,node_name])
+                           print(self.converted_time)
                         if node_name != self.saved_nodes[(len(self.saved_nodes))-2]:
-                               self.time_points.append([self.frame_time,node_name])
+                               self.time_points.append([self.converted_time,node_name])
          
       #  self.calculate_velocity(self.time_points)
 
@@ -411,8 +403,12 @@ class Tracker:
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
             cv2.putText(frame, str(self.converted_time), (970,670), 
                         fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)
-           # if self.failed==True:
-            #   cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
+            cv2.putText(frame, "Press R to select new ROI", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            cv2.putText(frame, "Press E to stop tracking", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            cv2.putText(frame, "Press S to start new trial", (45,275), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            cv2.putText(frame, "Frame count : " + str(self.frame_count), (920,640), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
+
+            cv2.putText(frame, "FPS : " + str(self.frame_rate), (920,620), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
 
 
             #draw the path that the rat has traversed
@@ -441,7 +437,15 @@ class Tracker:
             for k, g in groupby(self.saved_nodes):
                 savelist.append(k)         
             file.writelines('%s,' % items for items in savelist)
-            file.write('\n')
+            file.write('\nSummary Trial\nStart-Next Nodes//  Time points(s)  //Seconds//Lenght(cm)// Velocity(cm/s)\n')
+#            file.write('\n Start node %s: ' % node for node in self.first_node)
+        #    file.write('\n Goal node %s: '  % node for node in self.last_node)
+            for i in range(0, len(self.summary_trial)):
+              #  for x in self.summary_trial[i]:#str(z), 
+                   line=" ".join(map(str,self.summary_trial[i]))
+                   file.write(line + '\n')
+        file.close()
+                
 
 
 
