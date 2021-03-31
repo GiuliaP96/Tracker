@@ -137,11 +137,12 @@ class Tracker:
                     converted_time = convert_milli(int(self.frame_time))
                     if self.saved_nodes:
                         logger.info(f'{converted_time} : The rat position is: {self.pos_centroid} @ {self.saved_nodes[-1]}')
+                  
                     else:
                         logger.info(f'{converted_time} : The rat position is: {self.pos_centroid}')
-                 
+                
                # else:
-                #    logger.info('Rat not detected')
+                   # logger.info('Rat not detected')
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord('q'):
@@ -152,7 +153,6 @@ class Tracker:
                 #condition to save/log data to file upon press of 's' key creating new trial in log file
                 self.failed= False
                 self.record_detections = not self.record_detections
-                #self.save_to_file(self.save)
                 self.saved_nodes = []
                 self.node_pos = []
                 self.centroid_list = []
@@ -161,7 +161,6 @@ class Tracker:
                 Rat=None
                 Init=False 
                 Rat = cv2.selectROI("Select ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
-                
                 tracker =cv2.TrackerCSRT_create()
                 
 
@@ -178,7 +177,9 @@ class Tracker:
                     
                     
             elif key == ord('e'):
-                ##condition to save to file and calculate velocity
+                ##condition to save Trailnum to file and calculate velocity
+                Init=False
+                Rat=None
                 self.calculate_velocity(self.time_points)
                 self.record_detections = not self.record_detections
                 self.save_to_file(self.save)
@@ -227,12 +228,15 @@ class Tracker:
                              counter += 1 #update counter  (int(self.frame_time))
                              cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
                             # cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
-                             Rat=boxes[len(boxes)-1] #assigne last boxes for the next frames 
+                             lost=boxes[len(boxes)-1] #assigne last boxes for the next frames 
                              if counter>3:
                                  print('counter',counter)
                              ##keep and draw last found box
-                             (x, y, w, h) = [int(v) for v in Rat]
+                             (x, y, w, h) = [int(v) for v in lost]
                              cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255), 2)
+                             
+                             Init=False
+                             Rat= None
                              
                        if found:# Tracking success 
                                 (x, y, w, h) = [int(v) for v in Rat]
@@ -368,7 +372,7 @@ class Tracker:
         '''
         nodes_dict = mask.create_node_dict(self.node_list)                #dictionary of node names and corresponding coordinates
         record = self.record_detections and not self.paused             #condition to go into 'save mode'
-        fail_detection = self.record_detections and not self.paused and self.failed
+        #fail_detection = self.record_detections and not self.paused and self.failed
         
         #if the centroid position of rat is within 20 pixels of any node
         #register that node to a list. 
@@ -406,9 +410,9 @@ class Tracker:
             cv2.putText(frame, "Press R to select new ROI", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
             cv2.putText(frame, "Press E to stop tracking", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
             cv2.putText(frame, "Press S to start new trial", (45,275), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
-            cv2.putText(frame, "Frame count : " + str(self.frame_count), (920,640), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
+            cv2.putText(frame, "Frame count : " + str(self.frame_count), (870,640), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
 
-            cv2.putText(frame, "FPS : " + str(self.frame_rate), (920,620), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
+         #   cv2.putText(frame, "FPS : " + str(self.frame_rate), (900,620), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
 
 
             #draw the path that the rat has traversed
@@ -437,7 +441,7 @@ class Tracker:
             for k, g in groupby(self.saved_nodes):
                 savelist.append(k)         
             file.writelines('%s,' % items for items in savelist)
-            file.write('\nSummary Trial\nStart-Next Nodes//  Time points(s)  //Seconds//Lenght(cm)// Velocity(cm/s)\n')
+            file.write('\nSummary Trial {self.trialnum}\nStart-Next Nodes//  Time points(s)  //Seconds//Lenght(cm)// Velocity(cm/s)\n')
 #            file.write('\n Start node %s: ' % node for node in self.first_node)
         #    file.write('\n Goal node %s: '  % node for node in self.last_node)
             for i in range(0, len(self.summary_trial)):
