@@ -87,6 +87,11 @@ class Tracker:
         self.saved_nodes = []
         self.saved_velocities=[]
         self.KF_age = 0
+        self.Rat=None
+        self.tracker=None
+        self.Init=None
+        self.myBox=None
+        self.fail_flag= 0
         
         self.record_detections = False
  
@@ -102,13 +107,8 @@ class Tracker:
         '''
         print('loading tracker...\n')
         time.sleep(2.0)
-        Rat= None 
-        Init=False
-        boxes =[]
-        tracker=None
-        self.fail_flag= 0
+        
     
-
         with open(self.save, 'a+') as file:
             file.write(f"Rat number: {self.rat} , Date: {self.date} \n")
 
@@ -127,7 +127,7 @@ class Tracker:
             if self.frame is not None:
                 self.disp_frame = self.frame.copy()
                 self.disp_frame = cv2.resize(self.disp_frame, (1176, 712)) 
-                self.preprocessing(self.disp_frame, Rat, tracker,Init,boxes)
+                self.preprocessing(self.disp_frame)  #, Rat, tracker,Init,boxes
                 self.annotate_frame(self.disp_frame)
                 cv2.imshow('Tracker', self.disp_frame)    
 
@@ -158,37 +158,33 @@ class Tracker:
                 self.centroid_list = []
                 self.trialnum += 1
                 logger.info('Recording Trial {}'.format(self.trialnum)) 
-                Rat=None
-                Init=False
+                
+                self.Init=False
                 self.time_points=[]
                 self.summary_trial=[]
-                Rat = cv2.selectROI("Select ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
-                tracker =cv2.TrackerCSRT_create()
+                self.Rat = cv2.selectROI("Select ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
+                self.tracker =cv2.TrackerCSRT_create()
                 
 
             elif key == ord('r'):
-                ##condition to select a new roi re-initialting tracker in same trialnum
+                ##re-initialize tracker with previous found bounding box, same trialnum
                # self.record_detections = not self.record_detections
-                Init=False
-                Rat=None
-                self.fail_flag =+1
-                logger.info('Failed detection {}'.format(self.fail_flag)) 
-                Rat = cv2.selectROI("Select another ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
-                tracker =cv2.TrackerCSRT_create()
-                
-               # self.failed= not self.failed
-                    
+               self.tracker=None
+               self.fail_flag +=1
+               logger.info('Failed detection {}'.format(self.fail_flag))
+               if self.fail_flag/2==1:
+                self.Init=False
+                self.Rat=self.myBox
+                self.fail_flag=0
+                self.tracker =cv2.TrackerCSRT_create()  
+                              
                     
             elif key == ord('e'):
                 ##condition to save Trailnum to file and calculate velocity
-                Init=False
-                Rat=None
-                self.calculate_velocity(self.time_points)
+                self.tracker=None
                 self.record_detections = not self.record_detections
-                self.save_to_file(self.save)
-                #self.saved_nodes = []
-                #self.node_pos = []
-                #self.centroid_list = []
+                self.calculate_velocity(self.time_points)
+                self.save_to_file(self.save)                
 
             elif key == ord(' '):
                 self.paused = not self.paused
@@ -196,67 +192,63 @@ class Tracker:
         self.cap.release()
         cv2.destroyAllWindows()
 
-    def preprocessing(self, frame,Rat, tracker, Init, boxes):
+    def preprocessing(self, frame): #,Rat, tracker, Init, boxes
         '''
         pre-process frame - apply mask, bg subtractor and morphology operations
 
         Input: Frame (i.e image to be preprocessed)
         '''
-      
         frame  = np.array(frame)
-        i=0
         #apply mask on frame from mask.py                                 
         for i in range(0,3):
             frame[:, :, i] = frame[:, :, i] * self.hex_mask        
         #background subtraction and morphology 
         backsub = BG_SUB.apply(frame)
-     #   kernel = np.ones((5,5),np.uint8)  
-                                #morphology operations
-      #  gradient = cv2.morphologyEx(backsub, cv2.MORPH_GRADIENT, kernel)
-        #backsub = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
-       # cv2.imshow('FRAME  TRACKER CSRT',backsub)
-        if Rat and self.frame is not None: ##Selected Roi
+       # cv2.imshow('frame tracker',backsub)
+       
+        if self.Rat and self.tracker is not None: ##Selected Roi
                 # Initialize tracker with first frame and bounding box if was not init before
-                       if(not Init):
-                            tracker.init(backsub, Rat)
-                            [x0, y0, x1, y1] = Rat      #save first bounding box
-                            myBox = (x0, y0, x1, y1)   
-                            Init = True
-                       (found,Rat) = tracker.update(backsub)    #update tracker with new frame bounding box                  
+                       if(not self.Init):
+                            self.tracker.init(backsub, self.Rat)
+                            [x0, y0, x1, y1] = self.Rat      #save first bounding box                            
+                            self.Init = True
+                     
+                       (found,self.Rat) = self.tracker.update(backsub)    #update tracker with new frame bounding box                  
                        
                        if not found and self.frame is not None: # Tracking failure
                              self.failed=True
-                             logger.info('Failed detection {}'.format(self.fail_flag)) 
+                            # logger.info('Failed detection {}'.format(fail_flag)) 
                              cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
-                             lost=boxes[len(boxes)-1] #assigne last boxes for the next frames 
-                             ##keep and draw last found box
-                             (x, y, w, h) = [int(v) for v in lost]
-                             cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255), 2)                             
-                             Init=False
-                             Rat= lost
+                            
+                             ##keep and draw last roi found 
+                             (x, y, w, h) = [int(v) for v in self.myBox]
+                             cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255),2) 
                              
+                             ##keep tracking contours in previous roi
+                             black = np.zeros((backsub.shape[0], backsub.shape[1], 3), np.uint8)
+                             black_ROI = cv2.rectangle(black,(x,y),(x + w, y + h),(255, 255, 255), -1)   
+                             gray = cv2.cvtColor(black_ROI,cv2.COLOR_BGR2GRAY)
+                             ret, mask = cv2.threshold(gray,127,255, 0)
+                             masked_ROI = cv2.bitwise_and(backsub,backsub,mask = mask)
+                             self.find_contours(masked_ROI)
+                            
+                            
                        if found:# Tracking success 
-                                (x, y, w, h) = [int(v) for v in Rat]
-                                myBox = (x, y, w, h)
-                                boxes.append(myBox)
-                                cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),(255, 0, 0), 2) ##draw blue bounding box                                 
-                                                       
+                                (x, y, w, h) = [int(v) for v in self.Rat]
+                                self.myBox =  x, y, w, h #self.Rat                                 
+                                cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),(0,255, 0), 1) ##draw blue bounding box                                 
+                                
+                                ##morphology operation to filter out pixels not inside bounding box 
                                 black = np.zeros((backsub.shape[0], backsub.shape[1], 3), np.uint8) #---black frame
                                 # frame with black everywhere and blank in buonding box position
-                                black1 = cv2.rectangle(black,(x,y),(x + w, y + h),(255, 255, 255), -1)   
-                                gray = cv2.cvtColor(black1,cv2.COLOR_BGR2GRAY)#---converting to gray
+                                black_ROI = cv2.rectangle(black,(x,y),(x + w, y + h),(255, 255, 255), -1)   
+                                gray = cv2.cvtColor(black_ROI,cv2.COLOR_BGR2GRAY)#---converting to gray
                                 #creating mask with ROI
                                 ret, mask = cv2.threshold(gray,127,255, 0)
                                 ##background subtracked frame masked out of ROI position
-                                fin = cv2.bitwise_and(backsub,backsub,mask = mask)#
-                                #kernel white
-                                kernel = np.ones((5,5),np.uint8)  
-                                #morphology operations
-                                gradient = cv2.morphologyEx(fin, cv2.MORPH_GRADIENT, kernel)
-                                closing = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
-                                cv2.imshow('to FIND CONTOURS',fin)
-                     
-                                self.find_contours(closing)
+                                masked_ROI = cv2.bitwise_and(backsub,backsub,mask = mask)#
+                             
+                                self.find_contours(masked_ROI)
                       
     def find_contours(self, frame):
         '''
@@ -265,17 +257,18 @@ class Tracker:
         '''
         contours, _ = cv2.findContours(frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)          #_, cont, _ in new opencv version
         detections_in_frame = 0
-
+       
         #create lists of centroid x and y means 
         cx_mean= []             
         cy_mean = []
-
+        
         #find contours greater than the minimum area and 
         #caluclate means of the of all such contours 
         for contour in contours:
             area = cv2.contourArea(contour)
-
-            if area > 4:            #prev MIN_RAT_SIZE = 5 
+            
+            if area >MIN_RAT_SIZE:            #prev  = 5  5
+            #    cv2.drawContours(self.disp_frame, contour, -1, (0,255,0), 3)
                 contour_moments = cv2.moments(contour)           
                 cx = int(contour_moments['m10'] / contour_moments['m00'])
                 cy = int(contour_moments['m01'] / contour_moments['m00'])
@@ -314,11 +307,11 @@ class Tracker:
     ##calculate rat speed between two consecutive nodes 
     ##result e.g.summary trial - [ [('209', '210'), (16.76, 17.56), 0.375] , [('210', '211'), (17.56, 17.88), 0.937],]  
  
-      bridges =  {60:('124', '201'),
-           172:('121', '302'),
-           169:('223', '404'),
-           60:('324', '401'),
-           60:('305', '220')}
+      bridges =  {0.60:('124', '201'),
+           1.72:('121', '302'),
+           1.69:('223', '404'),
+           0.60:('324', '401'),
+           0.60:('305', '220')}
       if len(time_points) > 3:
             self.summary_trial=[]
             lenght=0
@@ -345,7 +338,7 @@ class Tracker:
                        if end_node in dk:
                           lenght= k
                    else:
-                          lenght=30    ##30cm within islands
+                          lenght=0.30    ##30cm within islands
                 speed= round(lenght/difference, 3)
                 self.summary_trial.append([(start_node,end_node),(time_points[i][0],time_points[j][0]),difference,lenght,speed])
                 self.saved_velocities.append(speed)
@@ -371,7 +364,8 @@ class Tracker:
         nodes_dict = mask.create_node_dict(self.node_list)                #dictionary of node names and corresponding coordinates
         record = self.record_detections and not self.paused             #condition to go into 'save mode'
         #fail_detection = self.record_detections and not self.paused and self.failed
-        
+        cv2.putText(frame, str(self.converted_time), (970,670), 
+                        fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)
         #if the centroid position of rat is within 20 pixels of any node
         #register that node to a list. 
         if self.pos_centroid is not None:
@@ -384,7 +378,6 @@ class Tracker:
                         ###save timepoints for speed calculation
                         if len(self.time_points) <= 0:  
                            self.time_points.append([self.converted_time,node_name])
-                           print(self.converted_time)
                         if node_name != self.saved_nodes[(len(self.saved_nodes))-2]:
                                self.time_points.append([self.converted_time,node_name])
          
@@ -403,11 +396,10 @@ class Tracker:
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
             cv2.putText(frame,'Currently writing to file...', (60,80), 
                         fontFace = FONT, fontScale = 0.75, color = (255,255,255), thickness = 1)
-            cv2.putText(frame, str(self.converted_time), (970,670), 
-                        fontFace = FONT, fontScale = 0.75, color = (240,240,240), thickness = 1)
-            cv2.putText(frame, "Press R to select new ROI", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
-            cv2.putText(frame, "Press E to stop tracking", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
-            cv2.putText(frame, "Press S to start new trial", (45,275), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            
+            cv2.putText(frame, "R: stop/restart tracker", (45,225), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            cv2.putText(frame, "E: end trial", (45,250), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
+            cv2.putText(frame, "S: start new trial", (45,200), cv2.FONT_HERSHEY_TRIPLEX, 0.65,(250,250,250),1)
             cv2.putText(frame, "Frame count : " + str(self.frame_count), (870,640), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
 
          #   cv2.putText(frame, "FPS : " + str(self.frame_rate), (900,620), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
@@ -417,7 +409,7 @@ class Tracker:
             if len(self.centroid_list) >= 2:
                 for i in range(1, len(self.centroid_list)):
                     cv2.line(frame, self.centroid_list[i], self.centroid_list[i - 1], 
-                             color = (255, 0, 255), thickness = 2)
+                             color = (255, 0, 255), thickness = 1)
 
             if self.pos_centroid is not None:
                 cv2.line(frame, (self.pos_centroid[0] - 5, self.pos_centroid[1]), (self.pos_centroid[0] + 5, self.pos_centroid[1]), 
@@ -439,15 +431,13 @@ class Tracker:
             for k, g in groupby(self.saved_nodes):
                 savelist.append(k)         
             file.writelines('%s,' % items for items in savelist)
-            file.write('\nSummary Trial {}\nStart-Next Nodes// Time points(s) //Seconds//Lenght(cm)// Velocity(cm/s)\n'.format(self.trialnum))            
+            file.write('\nSummary Trial {}\nStart-Next Nodes// Time points(s) //Seconds//Lenght(cm)// Velocity(m/s)\n'.format(self.trialnum))            
             for i in range(0, len(self.summary_trial)):
-              #  for x in self.summary_trial[i]:#str(z), 
                    line=" ".join(map(str,self.summary_trial[i]))
                    file.write(line + '\n')
+            file.write('\n')
         file.close()
                 
-
-
 
 if __name__ == "__main__":
     today  = date.today()
