@@ -170,10 +170,11 @@ class Tracker:
                 Init=False
                 Rat=None
                 self.fail_flag =+1
+                logger.info('Failed detection {}'.format(self.fail_flag)) 
                 Rat = cv2.selectROI("Select another ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
                 tracker =cv2.TrackerCSRT_create()
-                logger.info('Recording Trial after failed detection {}'.format(self.fail_flag)) 
-                self.failed= not self.failed
+                
+               # self.failed= not self.failed
                     
                     
             elif key == ord('e'):
@@ -183,8 +184,7 @@ class Tracker:
                 self.calculate_velocity(self.time_points)
                 self.record_detections = not self.record_detections
                 self.save_to_file(self.save)
-                print('Trial number', self.trialnum, '\nStart:', self.first_node,'\nGoal:',self.last_node)  
-                self.saved_nodes = []
+                #self.saved_nodes = []
                 #self.node_pos = []
                 #self.centroid_list = []
 
@@ -212,7 +212,7 @@ class Tracker:
                                 #morphology operations
       #  gradient = cv2.morphologyEx(backsub, cv2.MORPH_GRADIENT, kernel)
         #backsub = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
-        cv2.imshow('FRAME  TRACKER CSRT',backsub)
+       # cv2.imshow('FRAME  TRACKER CSRT',backsub)
         if Rat and self.frame is not None: ##Selected Roi
                 # Initialize tracker with first frame and bounding box if was not init before
                        if(not Init):
@@ -220,23 +220,18 @@ class Tracker:
                             [x0, y0, x1, y1] = Rat      #save first bounding box
                             myBox = (x0, y0, x1, y1)   
                             Init = True
-                       (found,Rat) = tracker.update(backsub)    #update tracker with new frame bounding box  
-                     # self.paused= False
-                       counter=0 ##count number of time rat is not found
+                       (found,Rat) = tracker.update(backsub)    #update tracker with new frame bounding box                  
+                       
                        if not found and self.frame is not None: # Tracking failure
                              self.failed=True
-                             counter += 1 #update counter  (int(self.frame_time))
+                             logger.info('Failed detection {}'.format(self.fail_flag)) 
                              cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
-                            # cv2.putText(self.disp_frame, "Time : " + str(self.converted_time), (970,670), cv2.FONT_HERSHEY_TRIPLEX, 0.75, (0,0,250), 1)
                              lost=boxes[len(boxes)-1] #assigne last boxes for the next frames 
-                             if counter>3:
-                                 print('counter',counter)
                              ##keep and draw last found box
                              (x, y, w, h) = [int(v) for v in lost]
-                             cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255), 2)
-                             
+                             cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),( 0, 0,255), 2)                             
                              Init=False
-                             Rat= None
+                             Rat= lost
                              
                        if found:# Tracking success 
                                 (x, y, w, h) = [int(v) for v in Rat]
@@ -257,7 +252,7 @@ class Tracker:
                                 #morphology operations
                                 gradient = cv2.morphologyEx(fin, cv2.MORPH_GRADIENT, kernel)
                                 closing = cv2.morphologyEx(gradient, cv2.MORPH_CLOSE, kernel)
-                             #   cv2.imshow('to FIND CONTOURS',gradient)
+                                cv2.imshow('to FIND CONTOURS',fin)
                      
                                 self.find_contours(closing)
                       
@@ -278,7 +273,7 @@ class Tracker:
         for contour in contours:
             area = cv2.contourArea(contour)
 
-            if area > 2:            #prev MIN_RAT_SIZE = 5 
+            if area > 4:            #prev MIN_RAT_SIZE = 5 
                 contour_moments = cv2.moments(contour)           
                 cx = int(contour_moments['m10'] / contour_moments['m00'])
                 cy = int(contour_moments['m01'] / contour_moments['m00'])
@@ -329,6 +324,7 @@ class Tracker:
             
             format = '%H:%M:%S.%f' 
             # first_time=((time_points[i][0])/ 1000) % 60 
+            
         ##iterate over list of touple with time points and nodes IDs
         ###grab start time and node name and next node         
             for i in range(0, len(time_points)):
@@ -441,9 +437,7 @@ class Tracker:
             for k, g in groupby(self.saved_nodes):
                 savelist.append(k)         
             file.writelines('%s,' % items for items in savelist)
-            file.write('\nSummary Trial {self.trialnum}\nStart-Next Nodes//  Time points(s)  //Seconds//Lenght(cm)// Velocity(cm/s)\n')
-#            file.write('\n Start node %s: ' % node for node in self.first_node)
-        #    file.write('\n Goal node %s: '  % node for node in self.last_node)
+            file.write('f\nSummary Trial {self.trialnum}\nStart-Next Nodes// Time points(s) //Seconds//Lenght(cm)// Velocity(cm/s)\n')            
             for i in range(0, len(self.summary_trial)):
               #  for x in self.summary_trial[i]:#str(z), 
                    line=" ".join(map(str,self.summary_trial[i]))
