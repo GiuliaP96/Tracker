@@ -159,7 +159,9 @@ class Tracker:
                 self.trialnum += 1
                 logger.info('Recording Trial {}'.format(self.trialnum)) 
                 Rat=None
-                Init=False 
+                Init=False
+                self.time_points=[]
+                self.summary_trial=[]
                 Rat = cv2.selectROI("Select ROI",self.disp_frame, fromCenter=False,showCrosshair=True)
                 tracker =cv2.TrackerCSRT_create()
                 
@@ -437,7 +439,7 @@ class Tracker:
             for k, g in groupby(self.saved_nodes):
                 savelist.append(k)         
             file.writelines('%s,' % items for items in savelist)
-            file.write('f\nSummary Trial {self.trialnum}\nStart-Next Nodes// Time points(s) //Seconds//Lenght(cm)// Velocity(cm/s)\n')            
+            file.write('\nSummary Trial {}\nStart-Next Nodes// Time points(s) //Seconds//Lenght(cm)// Velocity(cm/s)\n'.format(self.trialnum))            
             for i in range(0, len(self.summary_trial)):
               #  for x in self.summary_trial[i]:#str(z), 
                    line=" ".join(map(str,self.summary_trial[i]))
