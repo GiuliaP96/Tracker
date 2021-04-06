@@ -18,21 +18,19 @@ Organistaion: Genzel Lab, Donders Institute
 Author(s): Atharva Kand-Giulia Porro
 '''
 
-from utils import mask, kalman_filter
 from itertools import groupby
 from datetime import date, timedelta, datetime
 from pathlib import Path 
 from collections import deque
+from utils import mask, kalman_filter
 
 import cv2
 import math
 import time
 import logging
-import argparse
+#import argparse
 import os
 import numpy as np
-
-
 
 KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
 BG_SUB = cv2.createBackgroundSubtractorMOG2(history = 500, varThreshold = 150, detectShadows = False)
@@ -41,6 +39,7 @@ FONT = cv2.FONT_HERSHEY_TRIPLEX
 RT_FPS = 25
 
 MIN_RAT_SIZE = 5
+
 
 
 #find the shortest distance between two points in space
@@ -80,12 +79,14 @@ class Tracker:
 
         self.pos_centroid = None
         self.kf_coords = None
-        self.centroid_list = deque(maxlen = 500)          #change maxlen value to chnage how long the pink line is
+        self.centroid_list = deque(maxlen = 500)         #change maxlen value to chnage how long the pink line is
         self.node_pos = []
         self.time_points= []
         self.node_id = []
         self.saved_nodes = []
         self.saved_velocities=[]
+        self.time_points=[]  ##EXTRA
+        self.summary_trial=[]
         self.KF_age = 0
         self.Rat=None
         self.tracker=None
@@ -145,11 +146,7 @@ class Tracker:
                    # logger.info('Rat not detected')
 
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print('#Program ended by user')
-                break
-
-            elif key == ord('s'):
+            if key == ord('s'):
                 #condition to save/log data to file upon press of 's' key creating new trial in log file
                 self.failed= False
                 self.record_detections = not self.record_detections
@@ -188,6 +185,10 @@ class Tracker:
 
             elif key == ord(' '):
                 self.paused = not self.paused
+                
+            elif key == ord('q'):
+                print('#Program ended by user')
+                break
 
         self.cap.release()
         cv2.destroyAllWindows()
@@ -198,24 +199,26 @@ class Tracker:
 
         Input: Frame (i.e image to be preprocessed)
         '''
-        frame  = np.array(frame)
+        if self.tracker is not None:
+            frame  = np.array(frame)
         #apply mask on frame from mask.py                                 
-        for i in range(0,3):
-            frame[:, :, i] = frame[:, :, i] * self.hex_mask        
-        #background subtraction and morphology 
-        backsub = BG_SUB.apply(frame)
-       # cv2.imshow('frame tracker',backsub)
+            for i in range(0,3):
+                 frame[:, :, i] = frame[:, :, i] * self.hex_mask        
+            #background subtraction and morphology 
+            backsub = BG_SUB.apply(frame)
+             # cv2.imshow('frame tracker',backsub)
        
-        if self.Rat and self.tracker is not None: ##Selected Roi
+         ##Selected Roi
                 # Initialize tracker with first frame and bounding box if was not init before
-                       if(not self.Init):
+            if not self.Init:
                             self.tracker.init(backsub, self.Rat)
-                            [x0, y0, x1, y1] = self.Rat      #save first bounding box                            
+                           # [x0, y0, x1, y1] = self.Rat      #save first bounding box                            
                             self.Init = True
+                        #update tracker in next frame (found=float,self.Rat= x,y,width,height)
                      
-                       (found,self.Rat) = self.tracker.update(backsub)    #update tracker with new frame bounding box                  
+            (found,self.Rat) = self.tracker.update(backsub)    #update tracker with new frame bounding box                  
                        
-                       if not found and self.frame is not None: # Tracking failure
+            if not found and self.frame is not None: # Tracking failure
                              self.failed=True
                             # logger.info('Failed detection {}'.format(fail_flag)) 
                              cv2.putText(self.disp_frame, "Tracking failure", (90,170), cv2.FONT_HERSHEY_TRIPLEX, 0.80,(0,0,250),2)
@@ -233,7 +236,7 @@ class Tracker:
                              self.find_contours(masked_ROI)
                             
                             
-                       if found:# Tracking success 
+            if found:# Tracking success 
                                 (x, y, w, h) = [int(v) for v in self.Rat]
                                 self.myBox =  x, y, w, h #self.Rat                                 
                                 cv2.rectangle(self.disp_frame, (x, y), (x + w, y + h),(0,255, 0), 1) ##draw blue bounding box                                 
@@ -245,9 +248,10 @@ class Tracker:
                                 gray = cv2.cvtColor(black_ROI,cv2.COLOR_BGR2GRAY)#---converting to gray
                                 #creating mask with ROI
                                 ret, mask = cv2.threshold(gray,127,255, 0)
+                                
                                 ##background subtracked frame masked out of ROI position
                                 masked_ROI = cv2.bitwise_and(backsub,backsub,mask = mask)#
-                             
+                               # cv2.imshow('Macked roi',masked_ROI)
                                 self.find_contours(masked_ROI)
                       
     def find_contours(self, frame):
@@ -307,16 +311,14 @@ class Tracker:
     ##calculate rat speed between two consecutive nodes 
     ##result e.g.summary trial - [ [('209', '210'), (16.76, 17.56), 0.375] , [('210', '211'), (17.56, 17.88), 0.937],]  
  
-      bridges =  {0.60:('124', '201'),
-           1.72:('121', '302'),
-           1.69:('223', '404'),
-           0.60:('324', '401'),
-           0.60:('305', '220')}
+      bridges = { ('124', '201'):0.60,
+           ('121', '302'):1.72,
+           ('223', '404'):1.69,
+           ('324', '401'):0.60,
+           ('305', '220'):0.60}
       if len(time_points) > 3:
-            self.summary_trial=[]
             lenght=0
-            self.first_node= time_points[0][1]
-            
+            self.first_node= time_points[0][1]            
             format = '%H:%M:%S.%f' 
             # first_time=((time_points[i][0])/ 1000) % 60 
             
@@ -327,17 +329,18 @@ class Tracker:
               start_time= datetime.strptime((time_points[i][0]), format).time()
               j=i+1
               if j == len(time_points):
-                self.last_node= time_points[i][1]
-                break
+                self.last_node= time_points[i][1]                
               else:
                 end_node= time_points[j][1]
                 end_time=datetime.strptime((time_points[j][0]), format).time()
                 difference = timedelta(hours= end_time.hour-start_time.hour, minutes= end_time.minute-start_time.minute, seconds=end_time.second-start_time.second, microseconds=end_time.microsecond-start_time.microsecond).total_seconds()
-                for k, dk in bridges.items():
-                   if start_node in dk:
-                       if end_node in dk:
-                          lenght= k
-                   else:
+                if (start_node, end_node) in bridges:
+                          lenght= bridges[(start_node, end_node)]
+                          
+                elif(end_node, start_node) in bridges:
+                        lenght= bridges[(end_node, start_node)] 
+                        
+                else:
                           lenght=0.30    ##30cm within islands
                 speed= round(lenght/difference, 3)
                 self.summary_trial.append([(start_node,end_node),(time_points[i][0],time_points[j][0]),difference,lenght,speed])
