@@ -88,107 +88,101 @@ def velocities(fname2,nl):
     values=[]
     timespace=[]
     vel=None
-    j=0
+    j=-1
     count=0
    # nodes_dict = mask.create_node_dict(nl)
-                ##read velocities 
+     ##read velocities 
     with open(name2,'r') as summary:
            velocities=[]
-           
-           nx, nsteps = 100, 20
-           x = np.linspace(0, 1, nx)
            lines = summary.readlines()
-           for line in lines:    
-             if 'Summary' in line:  # and flagsum
-                   #i+=1                   
-                   if len(velocities) >= 2:
-                      j+=1                        
-                      for i in range(1, len(velocities)): #points[i]
-                        append_value(trials=trials, key=j, value=velocities[i])
-                        append_value(trials=st, key=j, value=timespace[i])
-                      velocities=[]
-                      timespace=[]
-                   flagsum= False       
-             if 'Start' in line:
-                 flagsum=True 
-                 count=0             
-             if flagsum:
-                     if (".") in line: #in line
+           for line in lines:  
+             if 'Summary' in line:
+                 flagsum=False 
+             if not flagsum: 
+                 if len(velocities) >= 2:                                             
+                       for i in range(0, len(velocities)):
+                            append_value(trials=trials, key=count, value=velocities[i])
+                            append_value(trials=st, key=count, value=timespace[i])
+                 velocities=[]
+                 timespace=[]
+                                   
+             if 'Start' in line:  
+                   count+=1
+                   flagsum=True  
+             if flagsum:                     
+                     if (".") in line:                   
                         values = line.split()
                         timespace.append((float(values[4]),float(values[5])))
                         velocities.append(float(values[-1]))
+            # handle last trial
+           print('file ended with',count,'trials')
+           for i in range(0, len(velocities)):
+                  append_value(trials=trials, key=count, value=velocities[i])
+                  append_value(trials=st, key=count, value=timespace[i])
+                            
+            
     summary.close() 
     graph_speed_averages(trials)
-   # fig1.show()
     plt.show()
     graph_space_time(st)
     plt.show()
-    #fig2.show()
     
- #   graph(st,trials)   
-
 def graph_speed_averages(trials):
-    plt.rcParams["figure.figsize"] = (18.5,10.5)
- 
-    #cmap = mpl.cm.autumn
-    
+    ##plot averages velocities of each trial
+    plt.rcParams["figure.figsize"] = (18.5,10.5) 
+    #cmap = mpl.cm.autumn    
     velocity=[]
     trial_num=[]
     means=[]
-    print('SUMMARY AVERAGE VELOCITY')
+    print('\nSUMMARY AVERAGE VELOCITY')
     for k in trials:
         for vel in trials[k]:
             velocity.append(vel)            ##appen vel                            
         means.append(stat.mean(velocity))   ##calculate mean within trial
         trial_num.append(k)          ##append trial num  
-        print('\nTrial number',k,'Mean Velocity:', means[-1])
+        print('Trial number',k,'Mean Velocity:', means[-1])
     plt.plot(trial_num, means,linestyle='--', marker='o', color='k')
-   # fig= plt.gcf()
     find_intercept(x=trial_num, y=means)
- #   plt.show()
-   # fig1= plt.gcf()
-    #fig1.show()
-   # fig1.show()
     
 def graph_space_time(st): 
     plt.rcParams["figure.figsize"] = (18.5,10.5)
-    i=1
     time=[]
     space=[]
     x=[]
     y=[]
-      #  print('st', st)
+    num=-1
+    n = len(st)+1
+    colors = plt.cm.jet(np.linspace(0,1,n))    
+   # print('st', st)
     ##plot space and time for all nodes passed in all trials
-    for key in st:        
+    for key in st:   
+      num+=1
       for i in range(0,len(st[key])):
           t=round(float(st[key][i][0]),2) 
           s=round(float(st[key][i][1]),2)
           time.append(t)         
           space.append(s)
-         
-          if i+1 ==len(st[key]):         
-           x=np.cumsum(time)
-           y=np.cumsum(space)
+      ##cumulative sum of each trial time and space                    
+      x=np.cumsum(time)
+      y=np.cumsum(space)
           
       space=[]
-      time=[]              
-      #print('trial',key,i,'len',len(st[key]),'time',x,'space',y)  
+      time=[]            
+      color=colors[key]
       
-      plot_velocities(x,y,key)
+      plt.plot(x,y,label='Trial{}'.format(key),linestyle='--', marker='o',color=color)
+     
+    
+    plt.legend(loc='right', frameon=False) 
     plt.title('Space/Time all nodes in all Trials',fontsize=24)
     plt.xlabel('Space (meters)',fontsize=20)
-    plt.ylabel('Time (seconds)', fontsize=20)              #break  
-    plt.legend(loc='right', frameon=False) 
-    plt.figure(figsize=((18.5,10.5)))
-    plt.show()
+    plt.ylabel('Time (seconds)', fontsize=20) 
+    plt.xticks(np.arange(0, 300, 10)) 
+    plt.yticks(np.arange(0, 30, 1)) 
+   # plt.figure(figsize=((18.5,10.5)))
+    plt.show()    
     
-def plot_velocities(x,y,key):  
- 
-    #cmap = mpl.cm.autumn
-    #for j in range(0,len(x)):
-    plt.plot(x,y,label='Trial{}'.format(key),linestyle='--', marker='o')
-    
-          
+         
 def find_intercept(x,y):  
     # Find the slope and intercept of the best fit line        
  slope, intercept = np.polyfit(x, y, 1)
@@ -197,12 +191,14 @@ def find_intercept(x,y):
  abline_values = [slope * i + intercept for i in x]
 
 # Plot the best fit line over the actual values
+ tick=len(x)+1
  plt.plot(x, y, '--')
  plt.plot(x, abline_values, 'r')
  plt.text(9,0.3, s='slope:{}'.format(round(slope,6)), fontsize=20)
  plt.title('Mean Velocity all Trials',fontsize=24) 
  plt.xlabel('Trial number',fontsize=20)
  plt.ylabel('Speed (m/s)',fontsize=20) 
+ plt.xticks(np.arange(0, tick, 1)) 
  plt.figure(figsize=((18.5,10.5)))
  plt.show()
 
@@ -210,7 +206,7 @@ def find_intercept(x,y):
 def append_value(trials, key, value):
     # Check if key exist in dict or not
     if key in trials:
-        # Key exist in dict.
+        #if Key exist in dict.
         # Check if type of value of key is list or not
         if not isinstance(trials[key], list):
             # If type is not list then make it list
@@ -218,8 +214,7 @@ def append_value(trials, key, value):
         # Append the value in list
         trials[key].append(value)
     else:
-        # As key is not in dict,
-        # so, add key-value pair
+        # As key is not in dict,so, add key-value pair
         trials[key] = value
     return trials
         
