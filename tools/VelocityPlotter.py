@@ -150,6 +150,8 @@ def graph_space_time(st):
     space=[]
     x=[]
     y=[]
+    max_space=0
+    max_time=0
     num=-1
     n = len(st)+1
     colors = plt.cm.jet(np.linspace(0,1,n))    
@@ -168,19 +170,24 @@ def graph_space_time(st):
           
       space=[]
       time=[]            
-      color=colors[key]
-      
+      color=colors[key]      
       plt.plot(x,y,label='Trial{}'.format(key),linestyle='--', marker='o',color=color)
-     
-    
+      
+      if max(x) > max_space:
+         max_space=max(x)+2
+         max_time=max(y)+2
+
     plt.legend(loc='right', frameon=False) 
     plt.title('Space/Time all nodes in all Trials',fontsize=24)
     plt.xlabel('Space (meters)',fontsize=20)
     plt.ylabel('Time (seconds)', fontsize=20) 
-    plt.xticks(np.arange(0, 300, 10)) 
-    plt.yticks(np.arange(0, 30, 1)) 
+    plt.xlim(0,max_space)
+    plt.ylim(0,max_time)
+    plt.xticks(np.arange(0, max_space, 5)) 
+    plt.yticks(np.arange(0, max_time, 1)) 
+    plt.show()
    # plt.figure(figsize=((18.5,10.5)))
-    plt.show()    
+        
     
          
 def find_intercept(x,y):  
@@ -199,7 +206,7 @@ def find_intercept(x,y):
  plt.xlabel('Trial number',fontsize=20)
  plt.ylabel('Speed (m/s)',fontsize=20) 
  plt.xticks(np.arange(0, tick, 1)) 
- plt.figure(figsize=((18.5,10.5)))
+ #plt.figure(figsize=((18.5,10.5)))
  plt.show()
 
          
