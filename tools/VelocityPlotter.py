@@ -160,8 +160,8 @@ def graph_space_time(st):
     for key in st:   
       num+=1
       for i in range(0,len(st[key])):
-          t=round(float(st[key][i][0]),2) 
-          s=round(float(st[key][i][1]),2)
+          s=round(float(st[key][i][0]),2) 
+          t=round(float(st[key][i][1]),2)
           time.append(t)         
           space.append(s)
       ##cumulative sum of each trial time and space                    
@@ -183,8 +183,8 @@ def graph_space_time(st):
     plt.ylabel('Time (seconds)', fontsize=20) 
     plt.xlim(0,max_space)
     plt.ylim(0,max_time)
-    plt.xticks(np.arange(0, max_space, 5)) 
-    plt.yticks(np.arange(0, max_time, 1)) 
+    plt.xticks(np.arange(0, max_space, 1)) 
+    plt.yticks(np.arange(0, max_time, 5)) 
     plt.show()
    # plt.figure(figsize=((18.5,10.5)))
         
@@ -198,10 +198,12 @@ def find_intercept(x,y):
  abline_values = [slope * i + intercept for i in x]
 
 # Plot the best fit line over the actual values
+ max_x=max(x)/2
+ min_y=(min(y) + max(y))/2
  tick=len(x)+1
  plt.plot(x, y, '--')
  plt.plot(x, abline_values, 'r')
- plt.text(9,0.3, s='slope:{}'.format(round(slope,6)), fontsize=20)
+ plt.text(max_x,min_y, s='slope:{}'.format(round(slope,6)), fontsize=20)
  plt.title('Mean Velocity all Trials',fontsize=24) 
  plt.xlabel('Trial number',fontsize=20)
  plt.ylabel('Speed (m/s)',fontsize=20) 
